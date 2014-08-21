@@ -1,7 +1,6 @@
 package main
 
 import (
-	"io"
 	"log"
 	"net"
 	"net/http"
@@ -17,8 +16,13 @@ type R struct {
 }
 
 // Send string expression to R via rpc
-func (r *R) Pipe(s string, result *string) error {
-	io.WriteString(r.stdin, s)
+func (r *R) Pipe(b []byte, result *string) error {
+
+	r.stdin.Write(b)
+	if b[len(b)-1] != '\n' {
+		r.stdin.Write([]byte{byte('\n')})
+	}
+
 	return nil
 }
 

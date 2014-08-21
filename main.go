@@ -5,6 +5,7 @@ import (
 	"bufio"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net/rpc"
 	"os"
 )
@@ -83,7 +84,6 @@ func startR(args ...string) *R {
 	}()
 
 	// copy stdin to R
-	// XXX make this not halt R when it fails
 	go func() {
 		reader := bufio.NewReader(os.Stdin)
 
@@ -103,26 +103,19 @@ func startR(args ...string) *R {
 	return &r
 }
 
-// reads all stdin and sends to R
+// reads all stdin and sends to R rpc
 func sendToR(client *rpc.Client) {
 
 	reader := bufio.NewReader(os.Stdin)
+
+	inBuf, err := ioutil.ReadAll(reader)
+	if err != nil {
+		fmt.Println(err)
+	}
+
 	var resp string
-
-	for {
-		line, err := reader.ReadString('\n')
-		if err != nil {
-			break
-		}
-
-		if line[len(line)-1] == '\n' {
-			err = client.Call("R.Pipe", line, &resp)
-		} else {
-			err = client.Call("R.Pipe", line, &resp)
-		}
-
-		if err != nil {
-			fmt.Println("ERROR: ", err)
-		}
+	err = client.Call("R.Pipe", inBuf, &resp)
+	if err != nil {
+		fmt.Println("ERROR: ", err)
 	}
 }
