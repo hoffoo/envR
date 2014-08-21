@@ -1,6 +1,8 @@
 package main
 
 import "os"
+import "path/filepath"
+import "strings"
 
 type Env struct {
 	addr string
@@ -28,4 +30,30 @@ func GetEnv() Env {
 
 func (env *Env) String() string {
 	return env.addr + ":" + env.port
+}
+
+// search $PATH for R
+func findR() string {
+
+	pathEnv := os.Getenv("PATH")
+
+	if pathEnv == "" {
+		return ""
+	}
+
+	pathList := strings.SplitAfter(pathEnv, string(os.PathListSeparator))
+
+	for _, path := range pathList {
+
+		if path[len(path)-1] == os.PathListSeparator {
+			path = path[:len(path)-1]
+		}
+
+		pathR := filepath.Join(path, "R")
+		if _, err := os.Stat(pathR); !os.IsNotExist(err) {
+			return pathR
+		}
+	}
+
+	return ""
 }

@@ -4,6 +4,7 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"net/rpc"
 	"os"
 )
@@ -11,13 +12,15 @@ import (
 // If R is not running start it up. Otherwise send stdin to running R.
 func main() {
 
-	rpcR := checkRunning()
-	if rpcR == nil {
-		fmt.Println("Starting R")
-		r := startR(os.Args[1:]...)
-		<-r.wait
-	} else {
+	if rpcR := checkRunning(); rpcR != nil {
+		// R is running, send stdin to it
 		sendToR(rpcR)
+	} else {
+		// R is not running, start
+		fmt.Println("Starting R")
+		if r := startR(os.Args[1:]...); r != nil {
+			<-r.wait
+		}
 	}
 }
 
@@ -52,16 +55,16 @@ func startR(args ...string) *R {
 		},
 	}
 
-	// make args
-	rArgs := make([]string, len(args)+1)
-	// XXX find R from $PATH
-	rArgs[0] = "/usr/bin/R"
-	for i, arg := range args {
-		rArgs[i+1] = arg
+	rBin := findR()
+	if rBin == "" {
+		fmt.Println("Couldnt find R, check your $PATH")
+		return nil
 	}
 
-	// XXX find R from $PATH
-	proc, err := os.StartProcess("/usr/bin/R", rArgs, attrs)
+	// make args
+	rArgs := append([]string{rBin}, args...)
+
+	proc, err := os.StartProcess(rBin, rArgs, attrs)
 	if err != nil {
 		panic(err)
 	}
@@ -76,7 +79,25 @@ func startR(args ...string) *R {
 		proc.Wait()
 		rStdin.Close()
 		rWrite.Close()
-		wait <- false
+		close(r.wait) // done, close and exit
+	}()
+
+	// copy stdin to R
+	// XXX make this not halt R when it fails
+	go func() {
+		reader := bufio.NewReader(os.Stdin)
+
+		for {
+			line, err := reader.ReadString('\n')
+			if err != nil {
+				break
+			}
+
+			io.WriteString(r.stdin, line)
+			if err != nil {
+				fmt.Println("ERROR: ", err)
+			}
+		}
 	}()
 
 	return &r
